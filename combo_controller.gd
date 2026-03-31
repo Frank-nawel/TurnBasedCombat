@@ -9,8 +9,6 @@ var _current_step: int   = 0
 var _timer:        float = 0.0
 var _anim_running: bool  = false
 var _window_open:  bool  = false
-
-# Input presionado durante la animación, esperando que termine para ejecutarse
 var _buffered_level: String = ""
 
 
@@ -24,24 +22,21 @@ func _process(delta: float) -> void:
 
 func register_input(level: String) -> void:
 	if _anim_running:
-		# Guardar el input para ejecutarlo cuando termine la animación
 		_buffered_level = level
 		return
-
 	_fire(level)
 
 
-## Llamado por AttackState cuando la animación termina.
 func notify_step_finished() -> void:
 	_anim_running = false
 
 	if not _buffered_level.is_empty():
-		# Había un input guardado — ejecutarlo ahora
 		var level: String = _buffered_level
 		_buffered_level = ""
-		_fire(level)
+		# Diferir para que la señal animation_finished termine de procesarse
+		# antes de cambiar el estado
+		call_deferred("_fire", level)
 	else:
-		# No había input — abrir ventana de espera
 		_window_open = true
 		_timer       = INPUT_WINDOW
 
