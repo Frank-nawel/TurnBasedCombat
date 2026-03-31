@@ -1,0 +1,76 @@
+class_name AttackState
+extends BattleActionState
+
+@export var lunge_force: float = 200.0
+@export var lunge_duration: float = 0.12
+
+var _lunge_timer: float = 0.0
+var _locked: bool = false
+
+# Player escribe aquí antes de cambiar el estado
+var pending_step: int = 1
+
+
+func _animation_name() -> String:
+	return ""
+
+
+func _enter_state() -> void:
+	super()  # resuelve player, anim, sprite, body
+	_locked = true
+	_lunge_timer = lunge_duration
+
+	sprite.flip_h = player.last_facing_flip_h
+
+	var anim_name :String= "%s_step_%d" % [_animation_name(), pending_step]
+	print("[AttackState] %s → pending_step=%d anim='%s' existe=%s" % [
+		name, pending_step, anim_name, str(anim.has_animation(anim_name))
+	])
+
+	if anim.has_animation(anim_name):
+		anim.get_animation(anim_name).loop_mode = Animation.LOOP_NONE
+		if anim.animation_finished.is_connected(_on_animation_finished):
+			anim.animation_finished.disconnect(_on_animation_finished)
+		anim.animation_finished.connect(_on_animation_finished)
+		anim.play(anim_name)
+		anim.seek(0.0)
+	else:
+		push_error("%s: animación '%s' no existe" % [name, anim_name])
+		_locked = false
+		ComboController.notify_step_finished()
+		_return_to_next_state()
+		return
+
+	var dir : Vector2 = Vector2.RIGHT
+	if player.last_facing_flip_h:
+		dir = Vector2.LEFT
+	player.body.velocity = dir * lunge_force
+
+
+func _physics_process(delta: float) -> void:
+	if not player:
+		return
+	if _lunge_timer > 0.0:
+		_lunge_timer -= delta
+		player.body.velocity = player.body.velocity.move_toward(
+			Vector2.ZERO, lunge_force / lunge_duration * delta
+		)
+	else:
+		player.body.velocity = player.body.velocity.move_toward(
+			Vector2.ZERO, 800.0 * delta
+		)
+
+
+func on_interrupt_point() -> void:
+	player.check_skill_interrupt()
+
+
+func _on_animation_finished(anim_name: String) -> void:
+	var expected := "%s_step_%d" % [_animation_name(), pending_step]
+	print("[AttackState] _on_animation_finished llamado: ", anim_name)
+	if anim_name != expected:
+		return
+	_locked = false
+	player.body.velocity = Vector2.ZERO
+	ComboController.notify_step_finished()
+	_return_to_next_state()
